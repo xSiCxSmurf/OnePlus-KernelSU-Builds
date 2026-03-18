@@ -49,8 +49,7 @@ jobs:
         # We search for the first occurrence of an include and place ours there
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         sed -i '/#include/i #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
-        
-        
+            
     - name: Setup official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
