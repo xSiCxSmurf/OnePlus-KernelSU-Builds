@@ -40,19 +40,16 @@ jobs:
         wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
         tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
     
-    - name: Download kernel source
+     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone --recursive https://github.com/LineageOS/android_kernel_oneplus_sm8250 -b lineage-23.2 android-kernel --depth=1
         
-        # --- FIX FOR SCHGM-FLASH ERRORS ---
+        # FIX: Inject the header AFTER pr_fmt but BEFORE usage
+        # We search for the first occurrence of an include and place ours there
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Inject the missing header to define struct smb_charger
-        sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
+        sed -i '/#include/i #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
         
-        # Existing patches
-        cd scripts
-        sed -i 's/ -dirty//g' setlocalversion
         
     - name: Setup official KernelSU
       run: |
