@@ -64,7 +64,7 @@ jobs:
         KSU_VERSION=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
       
-    - name: Build kernel with official KernelSU
+     - name: Build kernel with official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
@@ -73,13 +73,31 @@ jobs:
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
         export KBUILD_BUILD_HOST=Github-Action
         export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
+        
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
-        DEFCONFIG="vendor/kona-perf_defconfig vendor/debugfs.config"
         
-        # Build with heavy warning suppression to bypass 'visibility' and 'implicit' errors
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD $DEFCONFIG
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-visibility -Wno-incompatible-pointer-types"
+        # 1. Initialize the base config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        
+        # 2. FORCE ENABLE OPLUS VENDOR FEATURES (Fixes 'undefined symbol' errors)
+        # These flags ensure the files in techpack/ and drivers/soc/oplus are compiled
+        ./scripts/config --file out/.config \
+            --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
+            --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
+            --enable CONFIG_OPLUS_CHG \
+            --enable CONFIG_OPLUS_SENSOR_DEVINFO \
+            --enable CONFIG_OPLUS_SM8250_SOC_SETTINGS \
+            --enable CONFIG_DRM_MSM_NOTIFIER \
+            --enable CONFIG_OPLUS_FEATURE_DISPLAY \
+            --enable CONFIG_SND_SOC_WCD_MBHC
+            
+        # Refresh config after manual edits
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
+
+        # 3. Final Build
+        # Added -Wno-error to prevent minor techpack warnings from stopping the build
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-visibility"
     
     - name: Check a kernel output files with official KernelSU
       run: |
