@@ -21,22 +21,16 @@ jobs:
     - name: Setup build kernel environment
       run: |
         echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%y%m%d")" >> $GITHUB_ENV
-        echo "BUILD_TIME_1=$(TZ=Asia/Shanghai date "+%Y-%m-%d")" >> $GITHUB_ENV
         sudo apt-get update
         sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
-    - name: Download Clang-aosp
+    - name: Download Toolchains
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        mkdir clang-aosp
+        mkdir clang-aosp gcc-64
         wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz
         tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
-    
-    - name: Download Gcc-aosp
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        mkdir gcc-64
         wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
         tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
     
@@ -46,39 +40,37 @@ jobs:
         git clone --recursive https://github.com/LineageOS/android_kernel_oneplus_sm8250 -b lineage-23.2 android-kernel --depth=1
         
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Ensure techpacks are actually there
+        # Ensure submodules (Techpacks) are fully synced
         git submodule update --init --recursive
 
-        # FIX: Patch headers to resolve 'incomplete definition' and 'conflicting types'
+        # Fix the Schgm-flash header issue (from previous steps)
         sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.h
         sed -i '/#include "schgm-flash.h"/a #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
         
-        cd scripts
-        sed -i 's/ -dirty//g' setlocalversion
+        # localversion fix
+        sed -i 's/ -dirty//g' scripts/setlocalversion
 
     - name: Setup official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-        KSU_VERSION=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
-        echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+        echo "KSUVER=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)" >> $GITHUB_ENV
       
-    - name: Build kernel with official KernelSU
+    - name: Build kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
         export SUBARCH=arm64
         export BRAND_SHOW_FLAG=oneplus
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
-        export KBUILD_BUILD_HOST=Github-Action
-        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
+        
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         
-        # 1. Base Config
+        # 1. Generate base config
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
         
-        # 2. Fix 'Undefined Symbols' by enabling OPlus features
+        # 2. INJECT OPLUS CONFIGS (Fixes the undefined symbols)
         ./scripts/config --file out/.config \
             --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
             --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
@@ -87,118 +79,17 @@ jobs:
             --enable CONFIG_OPLUS_SM8250_SOC_SETTINGS \
             --enable CONFIG_DRM_MSM_NOTIFIER \
             --enable CONFIG_OPLUS_FEATURE_DISPLAY \
-            --enable CONFIG_SND_SOC_WCD_MBHC
-        
-        # 3. Sync and Build
+            --enable CONFIG_SND_SOC_WCD_MBHC \
+            --enable CONFIG_OPLUS_FP_COMMON
+            
+        # 3. Apply changes and compile
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-visibility"
-    
-    - name: Check a kernel output files with official KernelSU
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+
+    - name: Upload Artifacts
       run: |
-       cd $GITHUB_WORKSPACE/kernel_workspace
-       if [ -f android-kernel/out/arch/arm64/boot/Image ]; then
-           echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+       if [ -f $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image ]; then
+           echo "Build successful"
        else
-           echo "Kernel output file is empty"
            exit 1
        fi
-      
-    - name: Make AnyKernel3 with official KernelSU
-      if: env.CHECK_IMAGE == 'true'
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
-        sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=auto;!g' AnyKernel3/anykernel.sh
-        sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/g' AnyKernel3/anykernel.sh
-        cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/
-        rm -rf AnyKernel3/.git* AnyKernel3/README.md
-
-    - name: Compress AnyKernel3 with official KernelSU folder to zip
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/AnyKernel3
-        zip -r $GITHUB_WORKSPACE/AK3-Official-KSU_${{ env.KSUVER }}-${{ env.BUILD_TIME }}.zip ./*
-
-    - name: Upload Image (Official)
-      if: env.CHECK_IMAGE == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Image-Official-KSU_${{ env.KSUVER }}
-        path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image
-
-    - name: Upload AnyKernel3 (Official)
-      if: env.CHECK_IMAGE == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: AK3-Official-KSU_${{ env.KSUVER }}-${{ env.BUILD_TIME }}
-        path: kernel_workspace/AnyKernel3/*.zip
-
-    - name: Setup unofficial KernelSU
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        rm -rf out 
-        rm -rf KernelSU
-        rm -rf drivers/kernelsu
-        curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
-        KSU_VERSION_1=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
-        echo "KSUVER_1=$KSU_VERSION_1" >> $GITHUB_ENV
-
-    - name: Build kernel with unofficial KernelSU
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export BRAND_SHOW_FLAG=oneplus
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
-        export KBUILD_BUILD_HOST=Github-Action
-        export KBUILD_BUILD_USER=$(echo ${{ github.actor }} | tr A-Z a-z)
-        BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
-        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
-        
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
-        
-        ./scripts/config --file out/.config \
-            --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
-            --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
-            --enable CONFIG_OPLUS_CHG \
-            --enable CONFIG_OPLUS_SENSOR_DEVINFO \
-            --enable CONFIG_OPLUS_SM8250_SOC_SETTINGS \
-            --enable CONFIG_DRM_MSM_NOTIFIER \
-            --enable CONFIG_OPLUS_FEATURE_DISPLAY \
-            --enable CONFIG_SND_SOC_WCD_MBHC
-        
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-visibility"
-
-    - name: Check a kernel output files with unofficial KernelSU
-      run: |
-       cd $GITHUB_WORKSPACE/kernel_workspace
-       if [ -f android-kernel/out/arch/arm64/boot/Image ]; then
-           echo "CHECK_IMAGE_1=true" >> $GITHUB_ENV
-       else
-           echo "Kernel output file is empty"
-           exit 1
-       fi
-
-    - name: Make AnyKernel3 with unofficial KernelSU
-      if: env.CHECK_IMAGE_1 == 'true'
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        rm -rf AnyKernel3/*.zip
-        cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/
-        cd AnyKernel3
-        zip -r $GITHUB_WORKSPACE/AK3-Unofficial-KSU_${{ env.KSUVER_1 }}-${{ env.BUILD_TIME }}.zip ./*
-
-    - name: Upload Image (Unofficial)
-      if: env.CHECK_IMAGE_1 == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Image-Unofficial-KSU_${{ env.KSUVER_1 }}
-        path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image
-
-    - name: Upload AnyKernel3 (Unofficial)
-      if: env.CHECK_IMAGE_1 == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: AK3-Unofficial-KSU_${{ env.KSUVER_1 }}-${{ env.BUILD_TIME }}
-        path: kernel_workspace/AnyKernel3/*.zip
