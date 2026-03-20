@@ -37,18 +37,59 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone --recursive https://github.com/LineageOS/android_kernel_oneplus_sm8250 -b lineage-23.2 android-kernel --depth=1
-        
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        # Ensure submodules (Techpacks) are fully synced
+        # Clone with submodules and higher depth to ensure all files are present
+        git clone https://github.com/LineageOS/android_kernel_oneplus_sm8250 -b lineage-23.2 android-kernel --depth=1
+        cd android-kernel
         git submodule update --init --recursive
+        
+        # --- CRITICAL FIX: TECHPACK LINKING ---
+        # Some OPlus kernels expect techpacks to be symlinked to the root techpack folder
+        mkdir -p techpack/
+        [ -d "techpack/display" ] || ln -s ../techpack/display techpack/display 2>/dev/null || true
+        [ -d "techpack/audio" ] || ln -s ../techpack/audio techpack/audio 2>/dev/null || true
 
-        # Fix the Schgm-flash header issue (from previous steps)
+        # Patch headers to resolve previous 'incomplete definition' errors
         sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.h
         sed -i '/#include "schgm-flash.h"/a #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
         
-        # localversion fix
         sed -i 's/ -dirty//g' scripts/setlocalversion
+
+    - name: Build kernel with official KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export BRAND_SHOW_FLAG=oneplus
+        # Setup path
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
+        
+        BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
+        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
+        
+        # 1. Generate base config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        
+        # 2. FORCE ENABLE OPLUS VENDOR SUBSYSTEMS
+        ./scripts/config --file out/.config \
+            --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
+            --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
+            --enable CONFIG_OPLUS_CHG \
+            --enable CONFIG_OPLUS_SENSOR_DEVINFO \
+            --enable CONFIG_OPLUS_SM8250_SOC_SETTINGS \
+            --enable CONFIG_DRM_MSM_NOTIFIER \
+            --enable CONFIG_OPLUS_FEATURE_DISPLAY \
+            --enable CONFIG_SND_SOC_WCD_MBHC \
+            --enable CONFIG_OPLUS_FP_COMMON \
+            --enable CONFIG_OPLUS_VIBRATOR \
+            --enable CONFIG_OPLUS_PROJECT_NAME \
+            --enable CONFIG_OPLUS_DEVICE_INFO
+            
+        # 3. Apply changes
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
+        
+        # 4. FINAL BUILD
+        # We add 'techpack/display' and 'techpack/audio' to the include search path manually if needed
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
 
     - name: Setup official KernelSU
       run: |
