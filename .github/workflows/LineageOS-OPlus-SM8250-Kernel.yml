@@ -62,8 +62,7 @@ jobs:
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
         echo "KSUVER=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)" >> $GITHUB_ENV
       
- 
-    - name: Build kernel with official KernelSU
+     - name: Build kernel with official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
@@ -71,7 +70,8 @@ jobs:
         export BRAND_SHOW_FLAG=oneplus
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
         
-        # 1. These variables tell the Qualcomm build system to include the Techpacks
+        # 1. CRITICAL: OPlus Techpack Roots
+        # These exports tell the main Makefile where to find vendor drivers
         export AUDIO_ROOT=techpack/audio
         export DISPLAY_ROOT=techpack/display
         export VIDEO_ROOT=techpack/video
@@ -82,7 +82,8 @@ jobs:
         # 2. Initialize base config
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
         
-        # 3. Force enable missing OPlus features
+        # 3. FORCE ENABLE OPLUS VENDOR FEATURES
+        # This resolves the 'undefined symbol' errors by enabling the missing .c files
         ./scripts/config --file out/.config \
             --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
             --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
@@ -93,14 +94,12 @@ jobs:
             --enable CONFIG_OPLUS_FEATURE_DISPLAY \
             --enable CONFIG_SND_SOC_WCD_MBHC \
             --enable CONFIG_OPLUS_FP_COMMON \
-            --enable CONFIG_OPLUS_PROJECT_NAME
+            --set-str CONFIG_OPLUS_PROJECT_NAME "oneplus"
             
-        # 4. Apply changes
+        # 4. Refresh config and compile
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
-
-        # 5. FINAL BUILD
-        # Removed KBUILD_EXTMOD. We use the exported ROOT variables instead.
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+        
     
     - name: Check output (Official)
       run: |
