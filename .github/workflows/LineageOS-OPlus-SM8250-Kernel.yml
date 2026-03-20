@@ -44,13 +44,51 @@ jobs:
         # 1. Initialize techpack submodules
         git submodule update --init --recursive
         
-        # 2. Patch headers to resolve 'incomplete definition' and 'conflicting types'
+        # 2. Patch headers for schgm-flash
         sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.h
         sed -i '/#include "schgm-flash.h"/a #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
         
         # 3. Localversion fix
         sed -i 's/ -dirty//g' scripts/setlocalversion
 
+    - name: Build kernel with official KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export BRAND_SHOW_FLAG=oneplus
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
+        
+        # 4. CRITICAL: OPlus Techpack Environment Variables
+        # These tell the Qualcomm build system to actually enter these folders
+        export AUDIO_ROOT=techpack/audio
+        export DISPLAY_ROOT=techpack/display
+        export VIDEO_ROOT=techpack/video
+        
+        BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
+        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
+        
+        # 5. Initialize config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        
+        # 6. Force-enable OPlus features to resolve undefined symbols
+        ./scripts/config --file out/.config \
+            --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
+            --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
+            --enable CONFIG_OPLUS_CHG \
+            --enable CONFIG_OPLUS_SENSOR_DEVINFO \
+            --enable CONFIG_OPLUS_SM8250_SOC_SETTINGS \
+            --enable CONFIG_DRM_MSM_NOTIFIER \
+            --enable CONFIG_OPLUS_FEATURE_DISPLAY \
+            --enable CONFIG_SND_SOC_WCD_MBHC \
+            --enable CONFIG_OPLUS_FP_COMMON \
+            --enable CONFIG_OPLUS_VIBRATOR \
+            --set-str CONFIG_OPLUS_PROJECT_NAME "oneplus"
+            
+        # 7. Apply changes and build
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+        
     - name: Setup official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
