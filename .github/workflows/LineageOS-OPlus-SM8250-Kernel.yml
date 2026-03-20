@@ -41,6 +41,20 @@ jobs:
         git clone https://github.com/LineageOS/android_kernel_oneplus_sm8250 -b lineage-23.2 android-kernel --depth=1
         cd android-kernel
         git submodule update --init --recursive
+
+# 1. Initialize submodules (Wait for this to finish in logs)
+        git submodule update --init --recursive
+        
+        # 2. FIX: Manually ensure techpack symlinks exist
+        # This prevents the linker from missing the techpack objects
+        ln -sT ../techpack/display techpack/display || true
+        ln -sT ../techpack/audio techpack/audio || true
+        
+        # 3. Patch headers as before
+        sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.h
+        sed -i '/#include "schgm-flash.h"/a #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
+        
+        sed -i 's/ -dirty//g' scripts/setlocalversion
         
         # --- CRITICAL FIX: TECHPACK LINKING ---
         # Some OPlus kernels expect techpacks to be symlinked to the root techpack folder
