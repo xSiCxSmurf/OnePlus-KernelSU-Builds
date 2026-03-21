@@ -38,23 +38,9 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/engstk/op8/tree/blu_spark-16-custom -b blu_spark-16-custom android-kernel --depth=1
-        cd android-kernel
+        # Fixed the URL: git clone uses the repo URL, -b handles the branch
+        git clone https://github.com/engstk/op8 -b blu_spark-16-custom android-kernel --depth=1
 
-    - name: Build kernel with official KernelSU
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export BRAND_SHOW_FLAG=oneplus
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
-        
-  BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
-        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
-        
-        # 5. Initialize config
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD  blu_spark_defconfig
-   
     - name: Setup official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
@@ -74,17 +60,16 @@ jobs:
         
         # Initialize config
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD blu_spark_defconfig
-            
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
     
     - name: Check output (Official)
       run: |
-       if [ -f $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image ]; then
-           echo "CHECK_IMAGE=true" >> $GITHUB_ENV
-       else
-           echo "Build failed: Image not found" && exit 1
-       fi
+        if [ -f $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image ]; then
+            echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+        else
+            echo "Build failed: Image not found" && exit 1
+        fi
       
     - name: Make AnyKernel3 (Official)
       if: env.CHECK_IMAGE == 'true'
@@ -145,7 +130,7 @@ jobs:
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
         make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
 
-    - name: Upload Artifacts (Unofficial)
+    - name: Pack AnyKernel3 (Unofficial)
       run: |
         if [ -f $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image ]; then
             cp $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image $GITHUB_WORKSPACE/kernel_workspace/AnyKernel3/Image
