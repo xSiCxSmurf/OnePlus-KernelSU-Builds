@@ -1,0 +1,163 @@
+name: Build LineageOS OPlus SM8250 Kernel
+
+on:
+  workflow_dispatch:
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    name: Build Kernel by ${{ github.actor }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set swap to 10G
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 10
+
+    - name: Setup build kernel environment
+      run: |
+        echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%y%m%d")" >> $GITHUB_ENV
+        echo "BUILD_TIME_1=$(TZ=Asia/Shanghai date "+%Y-%m-%d")" >> $GITHUB_ENV
+        sudo apt-get update
+        sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+    
+    - name: Download Toolchains
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        mkdir clang-aosp gcc-64
+        wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz
+        tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
+        wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
+        tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
+    
+    - name: Download kernel source
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://github.com/engstk/op8/tree/blu_spark-16-custom -b blu_spark-16-custom android-kernel --depth=1
+        cd android-kernel
+
+    - name: Build kernel with official KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export BRAND_SHOW_FLAG=oneplus
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
+        
+  BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
+        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
+        
+        # 5. Initialize config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD  blu_spark_defconfig
+   
+    - name: Setup official KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+        echo "KSUVER=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)" >> $GITHUB_ENV
+      
+    - name: Build kernel with official KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export BRAND_SHOW_FLAG=oneplus
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
+        
+        BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
+        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
+        
+        # Initialize config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD blu_spark_defconfig
+            
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+    
+    - name: Check output (Official)
+      run: |
+       if [ -f $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image ]; then
+           echo "CHECK_IMAGE=true" >> $GITHUB_ENV
+       else
+           echo "Build failed: Image not found" && exit 1
+       fi
+      
+    - name: Make AnyKernel3 (Official)
+      if: env.CHECK_IMAGE == 'true'
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
+        sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
+        sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=auto;!g' AnyKernel3/anykernel.sh
+        sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/g' AnyKernel3/anykernel.sh
+        cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/
+        cd AnyKernel3 && zip -r $GITHUB_WORKSPACE/AK3-Official-KSU_${{ env.KSUVER }}-${{ env.BUILD_TIME }}.zip ./*
+
+    - name: Upload Artifacts (Official)
+      if: env.CHECK_IMAGE == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: Image-Official-KSU_${{ env.KSUVER }}
+        path: |
+          kernel_workspace/android-kernel/out/arch/arm64/boot/Image
+          *.zip
+
+    - name: Setup unofficial KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        rm -rf out 
+        rm -rf KernelSU drivers/kernelsu
+        curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
+        echo "KSUVER_1=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)" >> $GITHUB_ENV
+
+    - name: Build kernel with unofficial KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export BRAND_SHOW_FLAG=oneplus
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
+        export AUDIO_ROOT=techpack/audio
+        export DISPLAY_ROOT=techpack/display
+        export VIDEO_ROOT=techpack/video
+        
+        BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
+        EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
+        
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        
+        ./scripts/config --file out/.config \
+            --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
+            --enable CONFIG_OPLUS_FEATURE_DEVICE_INFO \
+            --enable CONFIG_OPLUS_CHG \
+            --enable CONFIG_OPLUS_SENSOR_DEVINFO \
+            --enable CONFIG_OPLUS_SM8250_SOC_SETTINGS \
+            --enable CONFIG_DRM_MSM_NOTIFIER \
+            --enable CONFIG_OPLUS_FEATURE_DISPLAY \
+            --enable CONFIG_SND_SOC_WCD_MBHC \
+            --enable CONFIG_OPLUS_FP_COMMON \
+            --set-str CONFIG_OPLUS_PROJECT_NAME "oneplus"
+        
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+
+    - name: Upload Artifacts (Unofficial)
+      run: |
+        if [ -f $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image ]; then
+            cp $GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image $GITHUB_WORKSPACE/kernel_workspace/AnyKernel3/Image
+            cd $GITHUB_WORKSPACE/kernel_workspace/AnyKernel3
+            zip -r $GITHUB_WORKSPACE/AK3-Unofficial-KSU_${{ env.KSUVER_1 }}-${{ env.BUILD_TIME }}.zip ./*
+        fi
+
+    - name: Upload Artifacts (Unofficial)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Image-Unofficial-KSU_${{ env.KSUVER_1 }}
+        path: |
+          kernel_workspace/android-kernel/out/arch/arm64/boot/Image
+          *.zip
+          
