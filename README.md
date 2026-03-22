@@ -1,6 +1,7 @@
 # KernelSU_Build_Test  
 
 ## Important Things
+i did not create this kernel nor did i make any other changes except for adding KSU. All credit should go to https://github.com/engstk
 
 ### Official KernelSU
 - For **NonGKI** devices, the last officially supported version of KernelSU is **0.9.5 (11872)**.  
@@ -43,7 +44,7 @@ Reboot to recovery mode and use ```adb sideload AK3-xxx.zip``` to flash AnyKerne
 3. Using Kernel Flasher to OTA  
 After installing the OTA and before rebooting, use [Kernel Flasher](https://github.com/tiann/KernelFlasher) to flash AnyKernel3 into the other slot.
 > Tip: If there is not a local update in ROM, please follow step 2 to flash AnyKernel3 after update.
-
+i
 ## Original Kernel Source  
 
 LineageOS 21:  
