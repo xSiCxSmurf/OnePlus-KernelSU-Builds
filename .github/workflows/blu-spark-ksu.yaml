@@ -44,7 +44,7 @@ jobs:
     - name: Download SUSFS
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://gitlab.com/simonpunk/susfs4ksu.git -b 1.4.2-kernel-4.19 susfs
+        git clone https://github.com/NoxS1d-Dev/susfs-kernel-4.19 -b susfs-1.5.12
 
     - name: Setup KernelSU Next
       run: |
