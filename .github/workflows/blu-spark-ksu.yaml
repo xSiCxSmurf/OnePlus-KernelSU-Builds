@@ -52,28 +52,31 @@ jobs:
         KSU_VERSION=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
-    - name: Apply SUSFS
+     - name: Apply SUSFS
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/susfs
         
-        # 1. Copy SUSFS source files into the kernel tree
+        # 1. Find and Copy SUSFS source files into the kernel tree
         cp ./kernel_patches/fs/susfs.c $GITHUB_WORKSPACE/kernel_workspace/android-kernel/fs/
         cp ./kernel_patches/include/linux/susfs.h $GITHUB_WORKSPACE/kernel_workspace/android-kernel/include/linux/
         cp ./kernel_patches/fs/sus_su.c $GITHUB_WORKSPACE/kernel_workspace/android-kernel/fs/
         cp ./kernel_patches/include/linux/sus_su.h $GITHUB_WORKSPACE/kernel_workspace/android-kernel/include/linux/
         
-        # 2. Prepare KernelSU-Next for SUSFS
-        cp ./kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next/
-        cp ./kernel_patches/KernelSU/kernel/sucompat.h $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next/kernel/
+        # 2. Find the KernelSU-Next patch (using find to avoid "No such file" errors)
+        KSU_PATCH=$(find . -name "10_enable_susfs_for_ksu.patch" | head -n 1)
+        SUCOMPAT=$(find . -name "sucompat.h" | head -n 1)
+        
+        cp $KSU_PATCH $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next/
+        cp $SUCOMPAT $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next/kernel/
         
         # 3. Patch KernelSU-Next
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next
-        patch -p1 < 10_enable_susfs_for_ksu.patch || echo "KSU-Next patch partially failed, check rejects"
+        patch -p1 < 10_enable_susfs_for_ksu.patch || echo "KSU-Next patch partially failed"
         
-        # 4. Patch Main Kernel
+        # 4. Patch Main Kernel (4.19)
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
         cp $GITHUB_WORKSPACE/kernel_workspace/susfs/kernel_patches/50_add_susfs_in_kernel-4.19.patch .
-        patch -p1 < 50_add_susfs_in_kernel-4.19.patch || echo "Main kernel patch partially failed, check rejects"
+        patch -p1 < 50_add_susfs_in_kernel-4.19.patch || echo "Main kernel patch partially failed"
         
         # 5. Inject Configs
         echo "CONFIG_KSU=y" >> arch/arm64/configs/blu_spark_defconfig
