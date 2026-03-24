@@ -41,12 +41,35 @@ jobs:
         # Fixed the URL: git clone uses the repo URL, -b handles the branch
         git clone https://github.com/engstk/op8 -b blu_spark-16-custom android-kernel --depth=1
 
-    - name: Setup official KernelSU
+    - name: Download SUSFS
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git -b 1.4.2-kernel-4.19 susfs
+
+    - name: Setup KernelSU Next
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-        echo "KSUVER=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)" >> $GITHUB_ENV
-      
+        curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -
+        KSU_VERSION_1=$(cd KernelSU-Next && expr $(/usr/bin/git rev-list --count HEAD) + 10200)
+        echo "KSUVER_1=$KSU_VERSION_1" >> $GITHUB_ENV
+
+    - name: Apply SUSFS
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/susfs
+        cp ./kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next/
+        cp ./kernel_patches/KernelSU/kernel/sucompat.h $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next/kernel/
+        cp ./kernel_patches/50_add_susfs_in_kernel-4.19.patch $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
+        cp ./kernel_patches/fs/susfs.c $GITHUB_WORKSPACE/kernel_workspace/android-kernel/fs/
+        cp ./kernel_patches/include/linux/susfs.h $GITHUB_WORKSPACE/kernel_workspace/android-kernel/include/linux/
+        cp ./kernel_patches/fs/sus_su.c $GITHUB_WORKSPACE/kernel_workspace/android-kernel/fs/
+        cp ./kernel_patches/include/linux/sus_su.h $GITHUB_WORKSPACE/kernel_workspace/android-kernel/include/linux/
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/KernelSU-Next
+        patch -p1 < 10_enable_susfs_for_ksu.patch
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
+        patch -p1 < 50_add_susfs_in_kernel-4.19.patch
+        # Make sure again to have CONFIG_KSU and CONFIG_KSU_SUSFS enabled before building the kernel
+        sed -i 's/# CONFIG_KSU is not set/CONFIG_KSU=y/g' arch/arm64/configs/blu_spark_defconfig
+        sed -i 's/# CONFIG_KSU_SUSFS is not set/CONFIG_KSU_SUSFS=y/g' arch/arm64/configs/blu_spark_defconfig
     - name: Build kernel with official KernelSU
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
