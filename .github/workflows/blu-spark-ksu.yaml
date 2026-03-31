@@ -38,9 +38,9 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/engstk/op8 -b blu_spark-16-custom android-kernel --depth=1
+        git clone https://github.com/xSiCxSmurf/android_kernel_oneplus_sm8250 -b main --depth=1
 
-    - name: Build kernel
+    - name: Build kernel-A16
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export ARCH=arm64
