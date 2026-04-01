@@ -21,7 +21,6 @@ jobs:
     - name: Setup build kernel environment
       run: |
         echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%y%m%d")" >> $GITHUB_ENV
-        echo "BUILD_TIME_1=$(TZ=Asia/Shanghai date "+%Y-%m-%d")" >> $GITHUB_ENV
         sudo apt-get update
         sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
@@ -30,23 +29,28 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         mkdir clang-aosp gcc-64
+        # Download Clang
         wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz
         tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
+        # Download GCC 64-bit
         wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
         tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
-    
+
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/xSiCxSmurf/android_kernel_oneplus_sm8250 -b main --depth=1
+        # Cloned into a folder named 'kernel-source' for consistency
+        git clone https://github.com/xSiCxSmurf/android_kernel_oneplus_sm8250 -b main --depth=1 kernel-source
 
-    - name: Build kernel-A16
+    - name: Build kernel
       run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
         export ARCH=arm64
         export SUBARCH=arm64
+        # Add toolchains to PATH
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
         
+        # Build Commands
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         
@@ -59,14 +63,15 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        cp android-kernel/out/arch/arm64/boot/Image AnyKernel3/
-        cd AnyKernel3 && zip -r $GITHUB_WORKSPACE/AK3-KSU-Next-SUSFS-Simonpunk-${{ env.BUILD_TIME }}.zip ./*
+        # Ensure the path to the compiled Image is correct
+        cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
+        cd AnyKernel3 && zip -r $GITHUB_WORKSPACE/AK3-Simonpunk-${{ env.BUILD_TIME }}.zip ./*
 
     - name: Upload Artifacts
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: Kernel-Simonpunk-SUSFS
+        name: Kernel-Simonpunk-Release
         path: |
-          kernel_workspace/android-kernel/out/arch/arm64/boot/Image
+          kernel_workspace/kernel-source/out/arch/arm64/boot/Image
           *.zip
