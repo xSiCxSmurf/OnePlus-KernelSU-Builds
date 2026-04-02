@@ -1,4 +1,4 @@
-name: Build LineageOS OPlus SM8250 Kernel
+Name: Build LineageOS OPlus SM8250 Kernel
 
 on:
   workflow_dispatch:
@@ -11,7 +11,10 @@ jobs:
     name: Build Kernel by ${{ github.actor }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Source
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.myrepo }} # Updated to use your PAT name
 
     - name: Set swap to 10G
       uses: pierotofy/set-swap-space@master
@@ -29,30 +32,52 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         mkdir clang-aosp gcc-64
-        # Download Clang
         wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz
         tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
-        # Download GCC 64-bit
         wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
         tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
 
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # Cloned into a folder named 'kernel-source' for consistency
         git clone https://github.com/xSiCxSmurf/android_kernel_oneplus_sm8250 -b main --depth=1 kernel-source
+
+    - name: Integrate KernelSU-Next
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
+        curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -
+
+    - name: Integrate SUSFS 1.5.3
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
+        git clone https://gitlab.com/simonpunk/susfs4kernel.git -b gki-android12-5.10 susfs
+        
+        # Copy core SUSFS files
+        cp susfs/kernel/include/linux/susfs.h include/linux/
+        cp susfs/kernel/fs/susfs.c fs/
+        
+        # Apply SUSFS patch to KernelSU-Next
+        cp susfs/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch ./KernelSU-Next/
+        cd KernelSU-Next
+        patch -p1 < 0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch
 
     - name: Build kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
         export ARCH=arm64
         export SUBARCH=arm64
-        # Add toolchains to PATH
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc-64/bin:$PATH
         
-        # Build Commands
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
+        
+        # Enable Kprobes and SUSFS in defconfig
+        DEFCONFIG="arch/arm64/configs/blu_spark_defconfig"
+        echo "CONFIG_KPROBES=y" >> $DEFCONFIG
+        echo "CONFIG_KPROBE_EVENTS=y" >> $DEFCONFIG
+        echo "CONFIG_KSU=y" >> $DEFCONFIG
+        echo "CONFIG_KSU_NEXT=y" >> $DEFCONFIG
+        echo "CONFIG_SUSFS=y" >> $DEFCONFIG
         
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD blu_spark_defconfig
         make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
@@ -63,15 +88,15 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AnyKernel3
-        # Ensure the path to the compiled Image is correct
         cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
-        cd AnyKernel3 && zip -r $GITHUB_WORKSPACE/AK3-Simonpunk-${{ env.BUILD_TIME }}.zip ./*
+        cd AnyKernel3 && zip -r $GITHUB_WORKSPACE/AK3-KSU-Next-SUSFS-${{ env.BUILD_TIME }}.zip ./*
 
     - name: Upload Artifacts
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: Kernel-Simonpunk-Release
+        name: Kernel-KSU-Next-SUSFS
         path: |
           kernel_workspace/kernel-source/out/arch/arm64/boot/Image
           *.zip
+          
