@@ -36,12 +36,13 @@ jobs:
         tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
         wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
         tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
-
+   
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/xSiCxSmurf/android_kernel_oneplus_sm8250 -b main --depth=1 kernel-source
-
+        # Injecting the Fine-Grained PAT into the clone URL
+        git clone https://x-access-token:${{ secrets.myrepo }}@github.com/xSiCxSmurf/android_kernel_oneplus_sm8250 -b main --depth=1 kernel-source
+        
     - name: Integrate KernelSU-Next
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
