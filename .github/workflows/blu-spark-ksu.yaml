@@ -58,7 +58,7 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://x-access-token:${{ secrets.MYREPO }}@github.com/xSiCxSmurf/android_kernel_oneplus_sm8250-A16.git -b lineage-23.2 --depth=1 kernel-source
+        git clone https://x-access-token:${{ secrets.MYREPO }}@github.com/xSiCxSmurf/android_kernel_oneplus_sm8250-A16.git -b main --depth=1 kernel-source
         
     - name: Integrate KernelSU-Next
       run: |
@@ -68,7 +68,9 @@ jobs:
     - name: Integrate SUSFS 1.5.3
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
-        git clone https://gitlab.com/simonpunk/susfs4kernel.git -b gki-android12-5.10 susfs
+        curl -L https://gitlab.com/simonpunk/susfs4kernel/-/archive/gki-android12-5.10/susfs4kernel-gki-android12-5.10.tar.gz -o susfs.tar.gz
+        tar -xzf susfs.tar.gz
+        mv susfs4kernel-gki-android12-5.10 susfs
         cp susfs/kernel/include/linux/susfs.h include/linux/
         cp susfs/kernel/fs/susfs.c fs/
         cp susfs/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch ./KernelSU-Next/
@@ -117,4 +119,3 @@ jobs:
         path: |
           kernel_workspace/kernel-source/out/arch/arm64/boot/Image
           *.zip
-          
