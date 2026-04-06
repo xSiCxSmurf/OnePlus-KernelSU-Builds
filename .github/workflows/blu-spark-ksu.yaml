@@ -68,12 +68,10 @@ jobs:
     - name: Integrate SUSFS 1.5.3
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
-        API_BASE="https://gitlab.com/api/v4/projects/50130101/repository/files"
-        BRANCH="gki-android12-5.10"
-        curl -L --fail -s "${API_BASE}/kernel%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${BRANCH}" -o include/linux/susfs.h
-        curl -L --fail -s "${API_BASE}/kernel%2Ffs%2Fsusfs.c/raw?ref=${BRANCH}" -o fs/susfs.c
-        mkdir -p KernelSU-Next
-        curl -L --fail -s "${API_BASE}/ksu%2F0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch/raw?ref=${BRANCH}" -o KernelSU-Next/susfs.patch
+        git clone https://github.com/sidex15/susfs4kernel.git -b gki-android12-5.10 susfs_src
+        cp susfs_src/kernel/include/linux/susfs.h include/linux/
+        cp susfs_src/kernel/fs/susfs.c fs/
+        cp susfs_src/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch ./KernelSU-Next/susfs.patch
         cd KernelSU-Next
         patch -p1 < susfs.patch
 
