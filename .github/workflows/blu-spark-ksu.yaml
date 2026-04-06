@@ -41,7 +41,7 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         # Injecting the Fine-Grained PAT into the clone URL
-        git clone https://x-access-token:${{ secrets.myrepo }}@github.com/xSiCxSmurf/android_kernel_oneplus_sm8250.git -b main --depth=1 kernel-source
+        git clone https://x-access-token:${{ secrets.myrepo }}@https://github.com/xSiCxSmurf/android_kernel_oneplus_sm8250-A16.git -b main --depth=1 kernel-source
         
     - name: Integrate KernelSU-Next
       run: |
