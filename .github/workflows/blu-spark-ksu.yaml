@@ -36,28 +36,15 @@ jobs:
         path: |
           ${{ github.workspace }}/kernel_workspace/clang-aosp
           ${{ github.workspace }}/kernel_workspace/gcc-64
-        key: ${{ runner.os }}-toolchain-r487747c
+        key: ${{ runner.os }}-toolchain-git-r487747c
 
     - name: Download Toolchain
       if: steps.cache-toolchain.outputs.cache-hit != 'true'
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         mkdir -p clang-aosp gcc-64
-        
-        echo "Downloading Clang..."
-        wget -c --tries=3 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz -O clang.tar.gz
-        
-        echo "Downloading GCC..."
-        wget -c --tries=3 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz -O gcc.tar.gz
-        
-        if [ -s clang.tar.gz ] && [ -s gcc.tar.gz ]; then
-            tar -C clang-aosp/ -zxvf clang.tar.gz
-            tar -C gcc-64/ -zxvf gcc.tar.gz
-            rm clang.tar.gz gcc.tar.gz
-        else
-            echo "Download failed or files are empty"
-            exit 1
-        fi
+        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b main-kernel-build-2023 --depth=1 clang-aosp
+        git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 -b android-12.1.0_r27 --depth=1 gcc-64
 
     - name: Cache ccache
       uses: actions/cache@v4
