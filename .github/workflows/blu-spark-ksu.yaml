@@ -68,14 +68,12 @@ jobs:
     - name: Integrate SUSFS 1.5.3
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
-        curl -L https://gitlab.com/simonpunk/susfs4kernel/-/archive/gki-android12-5.10/susfs4kernel-gki-android12-5.10.tar.gz -o susfs.tar.gz
-        tar -xzf susfs.tar.gz
-        mv susfs4kernel-gki-android12-5.10 susfs
-        cp susfs/kernel/include/linux/susfs.h include/linux/
-        cp susfs/kernel/fs/susfs.c fs/
-        cp susfs/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch ./KernelSU-Next/
+        RAW_URL="https://gitlab.com/simonpunk/susfs4kernel/-/raw/gki-android12-5.10"
+        curl -LSs "${RAW_URL}/kernel/include/linux/susfs.h" -o include/linux/susfs.h
+        curl -LSs "${RAW_URL}/kernel/fs/susfs.c" -o fs/susfs.c
+        curl -LSs "${RAW_URL}/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch" -o KernelSU-Next/susfs.patch
         cd KernelSU-Next
-        patch -p1 < 0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch
+        patch -p1 < susfs.patch
 
     - name: Build kernel
       run: |
