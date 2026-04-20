@@ -19,8 +19,8 @@ jobs:
 
     - name: Configure Git
       run: |
-    git config --global url."https://github.com/".insteadOf "git@github.com:"
-    git config --global url."https://x-access-token:${{ secrets.MYREPO }}@github.com/".insteadOf "https://github.com/"
+       git config --global url."https://github.com/".insteadOf "git@github.com:"
+       git config --global url."https://x-access-token:${{ secrets.MYREPO }}@github.com/".insteadOf "https://github.com/"
 
 
 
