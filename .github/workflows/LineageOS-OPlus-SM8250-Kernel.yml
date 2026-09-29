@@ -38,7 +38,7 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/LineageOS/android_kernel_oneplus_sm8250 -b lineage-23.2 android-kernel --depth=1
+        git clone https://github.com/The-Anomalist/Singularity/tree/ -b event-horizon
         cd android-kernel
         
         # 1. Initialize techpack submodules
@@ -69,7 +69,7 @@ jobs:
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         
         # 5. Initialize config
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD defconfig
         
         # 6. Force-enable OPlus features to resolve undefined symbols
         ./scripts/config --file out/.config \
@@ -112,7 +112,7 @@ jobs:
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         
         # Initialize config
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD defconfig
         
         # Resolve 'undefined symbol' errors by enabling OPlus subsystems
         ./scripts/config --file out/.config \
@@ -180,7 +180,7 @@ jobs:
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
         
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD vendor/kona-perf_defconfig vendor/debugfs.config
+        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD defconfig
         
         ./scripts/config --file out/.config \
             --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
