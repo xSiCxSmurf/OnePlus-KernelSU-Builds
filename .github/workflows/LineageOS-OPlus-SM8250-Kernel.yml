@@ -26,14 +26,23 @@ jobs:
         sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
     
-    - name: Download Toolchains
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace
-        mkdir clang-aosp gcc-64
-        wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz
-        tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
-        wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
-        tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
+    - name: Setup Toolchains
+  run: |
+    cd $GITHUB_WORKSPACE/kernel_workspace
+    mkdir -p clang-aosp gcc-64
+
+    # Download Clang with retry logic
+    curl -sSL --retry 5 --retry-delay 5 --retry-connrefused \
+      -o clang-r487747c.tar.gz \
+      "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2023/clang-r487747c.tar.gz"
+    tar -C clang-aosp/ -zxvf clang-r487747c.tar.gz
+
+    # Download GCC with retry logic
+    curl -sSL --retry 5 --retry-delay 5 --retry-connrefused \
+      -o gcc-aarch64.tar.gz \
+      "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
+    tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
+
     
     - name: Download kernel source
       run: |
