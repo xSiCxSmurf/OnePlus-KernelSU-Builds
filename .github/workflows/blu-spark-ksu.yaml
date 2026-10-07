@@ -65,22 +65,22 @@ jobs:
     - name: Download kernel source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://x-access-token:${{ secrets.MYREPO }}@github.com/xSiCxSmurf/android_kernel_oneplus_sm8250-A16.git -b lineage-23.2 --depth=1 kernel-source
+        git clone https://x-access-token:${{ secrets.MYREPO }}@github.com/The-Anomalist/Singularity.git -b event-horizon --depth=1 kernel-source
         
-    - name: Integrate KernelSU-Next
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
-        curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -
+#    - name: Integrate KernelSU-Next
+  #    run: |
+   #     cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
+     #   curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -
 
-    - name: Integrate SUSFS 1.5.3
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
-        git clone https://github.com/sidex15/susfs4kernel.git -b gki-android12-5.10 susfs_src
-        cp susfs_src/kernel/include/linux/susfs.h include/linux/
-        cp susfs_src/kernel/fs/susfs.c fs/
-        cp susfs_src/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch ./KernelSU-Next/susfs.patch
-        cd KernelSU-Next
-        patch -p1 < susfs.patch
+ #   - name: Integrate SUSFS 1.5.3
+   #   run: |
+   #     cd $GITHUB_WORKSPACE/kernel_workspace/kernel-source
+    #    git clone https://github.com/sidex15/susfs4kernel.git -b gki-android12-5.10 susfs_src
+   #     cp susfs_src/kernel/include/linux/susfs.h include/linux/
+     #  ?45# cp susfs_src/kernel/fs/susfs.c fs/
+   #     cp susfs_src/ksu/0001-kernel-KernelSU-Next-Implement-SUSFS-support.patch ./KernelSU-Next/susfs.patch
+   #     cd KernelSU-Next
+    #    patch -p1 < susfs.patch
 
     - name: Build kernel
       run: |
