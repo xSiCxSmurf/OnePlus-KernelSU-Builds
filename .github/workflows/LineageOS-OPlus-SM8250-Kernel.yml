@@ -43,27 +43,25 @@ jobs:
           "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz"
         tar -C gcc-64/ -zxvf gcc-aarch64.tar.gz
 
-    - name: Download kernel source
+    
+    - name: Setup Kernel Source
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/The-Anomalist/Singularity.git -b event-horizon android-kernel
         cd android-kernel
-
-        # 1. Initialize techpack submodules
+        
+        # 1. Initialize techpack & KernelSU-Next submodules
         git submodule update --init --recursive
-
+        
         # 2. Patch headers for schgm-flash
         sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.h
         sed -i '/#include "schgm-flash.h"/a #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
-
+        
         # 3. Localversion fix
         sed -i 's/ -dirty//g' scripts/setlocalversion
 
-    - name: Setup official KernelSU
-      run: |
-        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-        echo "KSUVER=$(cd KernelSU && expr $(/usr/bin/git rev-list --count HEAD) + 10200)" >> $GITHUB_ENV
+        
+    
 
     - name: Build kernel with official KernelSU
       run: |
