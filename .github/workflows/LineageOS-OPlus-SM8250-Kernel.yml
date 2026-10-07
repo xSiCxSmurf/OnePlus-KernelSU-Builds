@@ -56,8 +56,9 @@ jobs:
         # 2. Patch headers for schgm-flash
         sed -i '1i#include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.h
         sed -i '/#include "schgm-flash.h"/a #include "smb5-lib.h"' drivers/power/supply/qcom/schgm-flash.c
+        sed -i 's/mmap_sem/mmap_lock/g' include/linux/huge_mm.h
         
-        # 3. Localversion fix
+        # 4. Localversion fix
         sed -i 's/ -dirty//g' scripts/setlocalversion
 
         
