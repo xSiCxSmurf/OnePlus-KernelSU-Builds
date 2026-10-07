@@ -23,7 +23,7 @@ jobs:
         echo "BUILD_TIME=$(TZ=Asia/Shanghai date "+%y%m%d")" >> $GITHUB_ENV
         echo "BUILD_TIME_1=$(TZ=Asia/Shanghai date "+%Y-%m-%d")" >> $GITHUB_ENV
         sudo apt-get update
-        sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool make squashfs-tools dpkg-dev libssl-dev python3 bc libc6-dev-i386 libncurses5-dev
+        sudo apt-get install -y git clang lld llvm make bc ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib bzip2 libbz2-dev liblz4-tool squashfs-tools dpkg-dev libssl-dev python3 libc6-dev-i386 libncurses5-dev
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
     - name: Setup Toolchains
@@ -71,7 +71,10 @@ jobs:
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
 
         # Initialize config
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD defconfig
+        export PATH="${{ github.workspace }}/clang/bin:$PATH"
+        make -j$(nproc) O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1  defconfig
+    
+        make O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1  $BA_CMD $EX_CMD defconfig
 
         # Force-enable OPlus features to resolve undefined symbols
         ./scripts/config --file out/.config \
@@ -88,8 +91,8 @@ jobs:
             --set-str CONFIG_OPLUS_PROJECT_NAME "oneplus"
 
         # Apply changes and build
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+        make O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1 $BA_CMD $EX_CMD olddefconfig
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1 $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
 
     - name: Check output (Official)
       run: |
@@ -134,7 +137,7 @@ jobs:
         BA_CMD="CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android-"
         EX_CMD="LD=ld.lld LLVM=1 LLVM_IAS=1"
 
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD defconfig
+        make O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1 $BA_CMD $EX_CMD defconfig
 
         ./scripts/config --file out/.config \
             --enable CONFIG_OPLUS_FEATURE_CHG_BASIC \
@@ -148,8 +151,8 @@ jobs:
             --enable CONFIG_OPLUS_FP_COMMON \
             --set-str CONFIG_OPLUS_PROJECT_NAME "oneplus"
 
-        make O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD olddefconfig
-        make -j$(nproc --all) O=out ARCH=arm64 CC=clang $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
+        make O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1 $BA_CMD $EX_CMD olddefconfig
+        make -j$(nproc --all) O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1 $BA_CMD $EX_CMD KCFLAGS="-Wno-error"
 
     - name: Package AnyKernel3 (Unofficial)
       run: |
